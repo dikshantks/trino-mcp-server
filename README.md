@@ -11,7 +11,7 @@ Get up and running in 5 minutes:
 3. **Configure**: Add MCP server to Cursor configuration
 4. **Test**: Ask Cursor to "show me all catalogs in Trino"
 
-See [Installation](##installation) for detailed platform-specific instructions.
+See [Installation](#installation) for detailed platform-specific instructions.
 
 ## 📋 Features
 
@@ -138,13 +138,7 @@ docker build -t trino-mcp-server:latest .
    ```
    %APPDATA%\Cursor\mcp.json
    ```
-4. Add the Trino MCP server configuration (see [Cursor MCP Integration](#cursor-mcp-integration))
-
-#### Common Windows Issues
-
-- **Docker daemon not running**: Start Docker Desktop
-- **Permission denied**: Run PowerShell as Administrator
-- **Path issues**: Use forward slashes or escaped backslashes in paths
+4. Add the Trino MCP server configuration (see [Cursor MCP Integration](#-cursor-mcp-integration))
 
 ### Linux
 
