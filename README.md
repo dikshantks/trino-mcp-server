@@ -207,8 +207,7 @@ docker build -t trino-mcp-server:latest .
 ### Step-by-Step Configuration
 
 1. **Open Cursor Settings**
-   - Press `Ctrl+,` (Windows/Linux) or `Cmd+,` (macOS)
-   - Or go to File → Preferences → Settings
+   - Go to File → Preferences → Settings
 
 2. **Navigate to MCP Settings**
    - Search for "MCP" in settings
@@ -217,16 +216,6 @@ docker build -t trino-mcp-server:latest .
 3. **Edit Configuration File**
    - Open the `mcp.json` file
    - Add the Trino MCP server configuration
-
-4. **Restart Cursor**
-   - Fully quit and restart Cursor to load the new configuration
-
-5. **Test Connection**
-   - Open a chat in Cursor
-   - Ask: "Show me all catalogs in Trino"
-   - The AI should use the Trino MCP tools
-
-   or use 
 
   ```json
    $ /.cursor/mcp.json
@@ -248,6 +237,14 @@ docker build -t trino-mcp-server:latest .
     }
 
    ```
+
+4. **Restart Cursor**
+   - Fully quit and restart Cursor to load the new configuration
+
+5. **Test Connection**
+   - Open a chat in Cursor
+   - Ask: "Show me all catalogs in Trino"
+   - The AI should use the Trino MCP tools
 
 ### Configuration Examples
 
