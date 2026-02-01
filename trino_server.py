@@ -32,7 +32,7 @@ logger = logging.getLogger("trino-server")
 mcp = FastMCP("trino")
 
 # Configuration from environment variables
-TRINO_HOST = os.environ.get("TRINO_HOST", "host.docker.internal")
+TRINO_HOST = os.environ.get("TRINO_HOST", "localhost")
 TRINO_PORT = int(os.environ.get("TRINO_PORT", "8088"))
 TRINO_USER = os.environ.get("TRINO_USER", "trino")
 TRINO_PASSWORD = os.environ.get("TRINO_PASSWORD")  # Optional
@@ -129,7 +129,7 @@ def get_trino_connection():
     """
     try:
         # Determine host - use host.docker.internal for localhost in Docker
-        host = TRINO_HOST if TRINO_HOST != "localhost" else "host.docker.internal"
+        host = TRINO_HOST
         
         # Set up authentication if password is provided
         auth = None

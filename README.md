@@ -225,6 +225,7 @@ docker build -t trino-mcp-server:latest .
           "command": "docker",
           "args": [
             "run", "-i", "--rm",
+            "--network", "host",
             "-e", "TRINO_HOST=localhost",
             "-e", "TRINO_PORT=8088",
             "-e", "TRINO_USER=trino",
