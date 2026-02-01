@@ -77,7 +77,7 @@ Before you begin, ensure you have:
 ### Step 1: Clone or Download
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/dikshantks/trino-mcp-server.git
 cd trino-mcp-server
 ```
 
