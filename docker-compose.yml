@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # Local Trino MCP Server
+  trino-mcp-local:
+    build: .
+    image: trino-mcp-server:latest
+    container_name: trino-mcp-local
+    stdin_open: true
+    tty: true
+    environment:
+      - TRINO_HOST=host.docker.internal
+      - TRINO_PORT=8088
+      - TRINO_USER=trino
+      - TRINO_CATALOG=tpch
+      - TRINO_SCHEMA=tiny
+      - LOG_LEVEL=INFO
+    # For Linux, uncomment the following line:
+    # network_mode: host
+    # Or use extra_hosts instead:
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+
+  # Trino MCP Server with Authentication
+  trino-mcp-auth:
+    build: .
+    image: trino-mcp-server:latest
+    container_name: trino-mcp-auth
+    stdin_open: true
+    tty: true
+    environment:
+      - TRINO_HOST=host.docker.internal
+      - TRINO_PORT=8088
+      - TRINO_USER=admin
+      - TRINO_PASSWORD=${TRINO_PASSWORD}
+      - TRINO_CATALOG=my_catalog
+      - TRINO_SCHEMA=my_schema
+      - LOG_LEVEL=INFO
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+
+  # Trino MCP Server with HTTPS
+  trino-mcp-https:
+    build: .
+    image: trino-mcp-server:latest
+    container_name: trino-mcp-https
+    stdin_open: true
+    tty: true
+    environment:
+      - TRINO_HOST=trino.example.com
+      - TRINO_PORT=8443
+      - TRINO_USER=trino
+      - TRINO_USE_HTTPS=true
+      - TRINO_CATALOG=tpch
+      - TRINO_SCHEMA=tiny
+      - LOG_LEVEL=INFO
+
+  # Trino MCP Server for Remote (via SSH tunnel)
+  # Note: SSH tunnel must be established separately:
+  # ssh -L 8088:localhost:8088 user@trino-server-host
+  trino-mcp-remote:
+    build: .
+    image: trino-mcp-server:latest
+    container_name: trino-mcp-remote
+    stdin_open: true
+    tty: true
+    network_mode: host
+    environment:
+      - TRINO_HOST=localhost
+      - TRINO_PORT=8088
+      - TRINO_USER=trino
+      - TRINO_CATALOG=tpch
+      - TRINO_SCHEMA=tiny
+      - LOG_LEVEL=INFO

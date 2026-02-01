@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "trino": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "TRINO_HOST=host.docker.internal",
+        "-e", "TRINO_PORT=8088",
+        "-e", "TRINO_USER=admin",
+        "-e", "TRINO_PASSWORD=your_password_here",
+        "-e", "TRINO_CATALOG=my_catalog",
+        "-e", "TRINO_SCHEMA=my_schema",
+        "trino-mcp-server:latest"
+      ],
+      "comment": "Replace 'your_password_here' with your actual Trino password"
+    }
+  }
+}

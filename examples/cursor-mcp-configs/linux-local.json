@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "trino": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "--add-host", "host.docker.internal:host-gateway",
+        "-e", "TRINO_HOST=host.docker.internal",
+        "-e", "TRINO_PORT=8088",
+        "-e", "TRINO_USER=trino",
+        "-e", "TRINO_CATALOG=tpch",
+        "-e", "TRINO_SCHEMA=tiny",
+        "trino-mcp-server:latest"
+      ]
+    }
+  }
+}
