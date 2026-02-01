@@ -11,7 +11,7 @@ Get up and running in 5 minutes:
 3. **Configure**: Add MCP server to Cursor configuration
 4. **Test**: Ask Cursor to "show me all catalogs in Trino"
 
-See [Installation](#installation) for detailed platform-specific instructions.
+See [Installation](##installation) for detailed platform-specific instructions.
 
 ## 📋 Features
 
@@ -55,7 +55,7 @@ See [Installation](#installation) for detailed platform-specific instructions.
 - **Quick Insights**: Get table statistics and sample data for rapid analysis
 - **Report Generation**: Use AI to generate queries for common reporting needs
 
-## 📦 Installation
+## Installation
 
 ### Prerequisites
 
