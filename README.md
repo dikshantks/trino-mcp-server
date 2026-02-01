@@ -204,7 +204,7 @@ docker build -t trino-mcp-server:latest .
 2. Navigate to **MCP**
 3. Open the MCP configuration file:
    ```
-   ~/Library/Application Support/Cursor/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json
+   ~/cursor/mcp.json
    ```
 4. Add the Trino MCP server configuration
 
@@ -221,7 +221,7 @@ docker build -t trino-mcp-server:latest .
    - Or manually navigate to the MCP configuration file (see platform-specific paths above)
 
 3. **Edit Configuration File**
-   - Open the `cline_mcp_settings.json` file
+   - Open the `mcp.json` file
    - Add the Trino MCP server configuration
 
 4. **Restart Cursor**
