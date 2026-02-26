@@ -51,6 +51,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - .dockerignore for optimized builds
 - Requirements.txt with pinned dependencies
 
+## [1.1.0] - 2025-02-26
+
+### Added
+- **PII Masking Feature**: Automatic detection and masking of sensitive data before it reaches the LLM
+  - Column-name heuristics to detect PII columns (email, phone, address, aadhaar, pan, etc.)
+  - Regex-based content scanning for PII patterns in cell values
+  - Partial masking mode (default): preserves data format while hiding values (e.g., `j***n@g***.com`)
+  - Full masking mode: complete redaction with `***MASKED***`
+  - Configurable via environment variables:
+    - `PII_MASKING_ENABLED` - Enable/disable masking
+    - `PII_MASK_STYLE` - `partial` or `full` masking
+    - `PII_MASKED_COLUMNS` - Additional columns to always mask
+    - `PII_ALLOWED_COLUMNS` - Columns to never mask (override auto-detection)
+  - Supports Indian PII formats (Aadhaar, PAN, Indian phone numbers)
+  - Supports international formats (email, phone, IP, credit card)
+  - Masked column summary appended to query results
+
+### Security
+- PII masking prevents accidental exposure of sensitive data to LLMs
+- Logging of masked columns for audit purposes
+
 ## [Unreleased]
 
 ### Planned
@@ -59,3 +80,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Additional authentication methods (OAuth, certificates)
 - More advanced query analysis tools
 - Performance monitoring and metrics
+- ML-based NER for advanced PII detection (optional)

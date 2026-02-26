@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "trino": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "TRINO_HOST=host.docker.internal",
+        "-e", "TRINO_PORT=8088",
+        "-e", "TRINO_USER=trino",
+        "-e", "TRINO_CATALOG=my_catalog",
+        "-e", "TRINO_SCHEMA=my_schema",
+        "-e", "PII_MASKING_ENABLED=true",
+        "-e", "PII_MASK_STYLE=partial",
+        "-e", "PII_MASKED_COLUMNS=secret_field,internal_id,customer_notes",
+        "-e", "PII_ALLOWED_COLUMNS=order_email,system_phone",
+        "trino-mcp-server:latest"
+      ],
+      "comment": "PII masking with custom column overrides. PII_MASKED_COLUMNS forces masking on specific columns. PII_ALLOWED_COLUMNS skips auto-detection for specific columns."
+    }
+  }
+}

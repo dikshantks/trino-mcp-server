@@ -24,6 +24,7 @@ See [Installation](#installation) for detailed platform-specific instructions.
 - ✅ **Table Statistics**: Get row counts and column statistics
 - ✅ **Optional Authentication**: Support for password-based authentication
 - ✅ **Health Checks**: Built-in connection testing tool
+- ✅ **PII Masking**: Automatic detection and masking of sensitive data (emails, phones, addresses, etc.)
 
 ### Available Tools
 
@@ -373,6 +374,43 @@ Then use this configuration:
 | `TRINO_PASSWORD` | No | - | Password for authentication (if required) |
 | `TRINO_USE_HTTPS` | No | `false` | Use HTTPS instead of HTTP |
 | `LOG_LEVEL` | No | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
+| `PII_MASKING_ENABLED` | No | `false` | Enable PII masking to redact sensitive data |
+| `PII_MASK_STYLE` | No | `partial` | Masking style: `full` or `partial` |
+| `PII_MASKED_COLUMNS` | No | - | Additional column names to always mask (comma-separated) |
+| `PII_ALLOWED_COLUMNS` | No | - | Column names to never mask (comma-separated, overrides auto-detection) |
+
+### PII Masking
+
+The server includes a configurable PII masking feature to prevent sensitive data from being exposed to the LLM:
+
+**How it works:**
+1. **Column-Name Detection**: Automatically detects columns with names like `email`, `phone`, `address`, `aadhaar`, `pan`, etc.
+2. **Content Scanning**: Scans cell values for patterns that look like PII (emails, phone numbers, credit cards, etc.)
+3. **Smart Masking**: Masks data while preserving format context (e.g., `j***n@g***.com` for emails)
+
+**Configuration:**
+- `PII_MASKING_ENABLED=true` - Enable masking (off by default)
+- `PII_MASK_STYLE=partial` - Show partial characters for context, or `full` for complete redaction
+- `PII_MASKED_COLUMNS=custom_field,secret_data` - Force masking on specific columns
+- `PII_ALLOWED_COLUMNS=order_email,system_phone` - Skip masking on specific columns
+
+**Detected PII Types:**
+- Email addresses
+- Phone numbers (international and Indian formats)
+- IP addresses
+- Credit card numbers
+- Indian Aadhaar numbers
+- Indian PAN numbers
+- Names, addresses, and other personal identifiers
+
+**Example output with masking:**
+```
+| email           | phone        | name    |
+|-----------------|--------------|---------|
+| j***n@g***.com  | ***-***-4567 | J***n   |
+
+[PII Masking Active] Masked columns: email (email), phone (phone), name (personal)
+```
 
 ### Authentication
 

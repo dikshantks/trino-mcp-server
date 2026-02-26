@@ -40,6 +40,12 @@ TRINO_USE_HTTPS = os.environ.get("TRINO_USE_HTTPS", "false").lower() == "true"
 TRINO_CATALOG = os.environ.get("TRINO_CATALOG", "tpch")
 TRINO_SCHEMA = os.environ.get("TRINO_SCHEMA", "tiny")
 
+# PII Masking Configuration
+PII_MASKING_ENABLED = os.environ.get("PII_MASKING_ENABLED", "true").lower() == "true"
+PII_MASKED_COLUMNS = [col.strip().lower() for col in os.environ.get("PII_MASKED_COLUMNS", "").split(",") if col.strip()]
+PII_ALLOWED_COLUMNS = [col.strip().lower() for col in os.environ.get("PII_ALLOWED_COLUMNS", "").split(",") if col.strip()]
+PII_MASK_STYLE = os.environ.get("PII_MASK_STYLE", "partial").lower()  # "full" or "partial"
+
 # === UTILITY FUNCTIONS ===
 
 def format_error_message(error: Exception, context: str = "") -> str:
@@ -203,6 +209,219 @@ def validate_query(query: str) -> bool:
     logger.debug(f"Query validated successfully")
     return True
 
+# === PII MASKING FUNCTIONS ===
+
+# Known PII column name patterns (case-insensitive matching)
+PII_COLUMN_PATTERNS = {
+    'email': ['email', 'e_mail', 'email_address', 'gmail', 'mail_id', 'emailid', 'user_email', 'customer_email'],
+    'phone': ['phone', 'mobile', 'cell', 'telephone', 'contact_number', 'phone_number', 'phoneno', 'mobileno', 
+              'contact_no', 'tel', 'fax', 'whatsapp'],
+    'address': ['address', 'street', 'city', 'state', 'zip', 'zipcode', 'postal', 'pincode', 'postal_code',
+                'addr', 'locality', 'landmark', 'house_no', 'flat_no', 'building', 'apartment'],
+    'identity': ['ssn', 'social_security', 'pan', 'pan_number', 'aadhaar', 'aadhar', 'aadhaar_number',
+                 'passport', 'passport_number', 'license_number', 'driving_license', 'voter_id', 'ration_card'],
+    'financial': ['credit_card', 'card_number', 'bank_account', 'account_number', 'ifsc', 'ifsc_code',
+                  'cvv', 'card_cvv', 'upi', 'upi_id', 'vpa'],
+    'personal': ['first_name', 'last_name', 'full_name', 'name', 'dob', 'date_of_birth', 'birth_date',
+                 'father_name', 'mother_name', 'spouse_name'],
+    'network': ['ip_address', 'ip', 'mac_address', 'mac', 'device_id', 'imei'],
+}
+
+
+def is_pii_column(column_name: str) -> tuple:
+    """
+    Check if a column name matches known PII patterns.
+    
+    Args:
+        column_name: The column name to check
+        
+    Returns:
+        Tuple of (is_pii: bool, pii_type: str or None)
+    """
+    col_lower = column_name.lower().strip()
+    
+    # Check if column is in the user-defined allowed list (skip masking)
+    if col_lower in PII_ALLOWED_COLUMNS:
+        return False, None
+    
+    # Check if column is in the user-defined forced mask list
+    for forced_col in PII_MASKED_COLUMNS:
+        if forced_col in col_lower or col_lower in forced_col:
+            return True, 'user_defined'
+    
+    # Check against known PII patterns
+    for pii_type, patterns in PII_COLUMN_PATTERNS.items():
+        for pattern in patterns:
+            # Match if pattern is contained in column name or vice versa
+            if pattern in col_lower or col_lower == pattern:
+                return True, pii_type
+    
+    return False, None
+
+
+# Compiled regex patterns for PII detection in cell values
+PII_REGEX_PATTERNS = {
+    'email': re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'),
+    'phone_intl': re.compile(r'\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b'),
+    'phone_indian': re.compile(r'\b(?:\+91|91|0)?[6-9]\d{9}\b'),
+    'ip_address': re.compile(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b'),
+    'credit_card': re.compile(r'\b(?:\d{4}[-\s]?){3}\d{4}\b'),
+    'aadhaar': re.compile(r'\b\d{4}[-\s]?\d{4}[-\s]?\d{4}\b'),  # Indian Aadhaar format
+    'pan': re.compile(r'\b[A-Z]{5}\d{4}[A-Z]\b'),  # Indian PAN format
+}
+
+
+def scan_for_pii_patterns(value: str) -> Optional[str]:
+    """
+    Scan a cell value for PII patterns using regex.
+    
+    Args:
+        value: The string value to scan
+        
+    Returns:
+        The type of PII detected, or None if no PII found
+    """
+    if not isinstance(value, str) or not value:
+        return None
+    
+    # Check each pattern
+    for pii_type, pattern in PII_REGEX_PATTERNS.items():
+        if pattern.search(value):
+            return pii_type
+    
+    return None
+
+
+def mask_cell_value(value, pii_type: str = None) -> str:
+    """
+    Mask a single cell value based on the configured mask style.
+    
+    Args:
+        value: The value to mask
+        pii_type: The type of PII (used for smart partial masking)
+        
+    Returns:
+        Masked value string
+    """
+    if value is None:
+        return None
+    
+    str_value = str(value)
+    
+    if not str_value or str_value.lower() in ('none', 'null', 'nan', ''):
+        return str_value
+    
+    # Full masking - replace entire value
+    if PII_MASK_STYLE == "full":
+        return "***MASKED***"
+    
+    # Partial masking - keep some characters for context
+    if pii_type == 'email' and '@' in str_value:
+        # Email: j***n@g***.com
+        parts = str_value.split('@')
+        if len(parts) == 2:
+            local = parts[0]
+            domain = parts[1]
+            masked_local = local[0] + '***' + (local[-1] if len(local) > 1 else '')
+            domain_parts = domain.split('.')
+            if len(domain_parts) >= 2:
+                masked_domain = domain_parts[0][0] + '***.' + domain_parts[-1]
+            else:
+                masked_domain = '***'
+            return f"{masked_local}@{masked_domain}"
+    
+    if pii_type in ('phone_intl', 'phone_indian', 'phone'):
+        # Phone: ***-***-4567 (show last 4 digits)
+        digits = re.sub(r'\D', '', str_value)
+        if len(digits) >= 4:
+            return f"***-***-{digits[-4:]}"
+        return "***-***-****"
+    
+    if pii_type == 'credit_card':
+        # Credit card: ****-****-****-1234 (show last 4)
+        digits = re.sub(r'\D', '', str_value)
+        if len(digits) >= 4:
+            return f"****-****-****-{digits[-4:]}"
+        return "****-****-****-****"
+    
+    if pii_type == 'aadhaar':
+        # Aadhaar: ****-****-1234 (show last 4)
+        digits = re.sub(r'\D', '', str_value)
+        if len(digits) >= 4:
+            return f"****-****-{digits[-4:]}"
+        return "****-****-****"
+    
+    if pii_type == 'pan':
+        # PAN: show first 2 and last 1 character
+        if len(str_value) >= 3:
+            return f"{str_value[:2]}*****{str_value[-1]}"
+        return "**********"
+    
+    if pii_type == 'ip_address':
+        # IP: show first octet only
+        parts = str_value.split('.')
+        if len(parts) == 4:
+            return f"{parts[0]}.***.***.*"
+        return "***.***.***.***"
+    
+    # Generic masking: show first and last character
+    if len(str_value) <= 2:
+        return "***"
+    elif len(str_value) <= 4:
+        return str_value[0] + "**" + str_value[-1]
+    else:
+        return str_value[0] + "***" + str_value[-1]
+
+
+def mask_pii_in_dataframe(df: pd.DataFrame, columns: list) -> tuple:
+    """
+    Apply PII masking to a DataFrame.
+    
+    Args:
+        df: The pandas DataFrame to mask
+        columns: List of column names
+        
+    Returns:
+        Tuple of (masked_df, masked_columns_summary)
+    """
+    masked_columns = {}
+    df_masked = df.copy()
+    
+    for col in columns:
+        # Layer 1: Check if column name indicates PII
+        is_pii, pii_type = is_pii_column(col)
+        
+        if is_pii:
+            # Mask entire column
+            df_masked[col] = df_masked[col].apply(lambda x: mask_cell_value(x, pii_type))
+            masked_columns[col] = pii_type
+            logger.debug(f"Masked column '{col}' (type: {pii_type}) based on column name")
+        else:
+            # Layer 2: Scan cell values for PII patterns
+            # Only scan string columns to avoid performance issues
+            if df_masked[col].dtype == 'object':
+                cells_with_pii = 0
+                detected_type = None
+                
+                # Sample first few rows to detect pattern
+                sample_size = min(10, len(df_masked))
+                for idx in range(sample_size):
+                    cell_value = df_masked[col].iloc[idx]
+                    if cell_value is not None:
+                        detected = scan_for_pii_patterns(str(cell_value))
+                        if detected:
+                            cells_with_pii += 1
+                            detected_type = detected
+                
+                # If significant portion of sample has PII, mask the column
+                if cells_with_pii >= 2 or (sample_size <= 3 and cells_with_pii >= 1):
+                    df_masked[col] = df_masked[col].apply(lambda x: mask_cell_value(x, detected_type))
+                    masked_columns[col] = f"{detected_type} (content)"
+                    logger.debug(f"Masked column '{col}' (type: {detected_type}) based on content scan")
+    
+    return df_masked, masked_columns
+
+
 def format_results(cursor, limit: int = 100) -> str:
     """
     Format query results as a readable table.
@@ -230,6 +449,13 @@ def format_results(cursor, limit: int = 100) -> str:
         # Create DataFrame for better formatting
         df = pd.DataFrame(rows, columns=columns)
         
+        # Apply PII masking if enabled
+        masked_columns = {}
+        if PII_MASKING_ENABLED:
+            df, masked_columns = mask_pii_in_dataframe(df, columns)
+            if masked_columns:
+                logger.info(f"PII masking applied to columns: {list(masked_columns.keys())}")
+        
         # Format as table with column width limits
         table = tabulate(df, headers='keys', tablefmt='grid', showindex=False, maxcolwidths=50)
         
@@ -237,6 +463,11 @@ def format_results(cursor, limit: int = 100) -> str:
         total_msg = f"\n\nShowing {result_count} row(s)"
         if result_count == limit:
             total_msg += f" (limited to {limit} rows)"
+        
+        # Add PII masking footer if columns were masked
+        if masked_columns:
+            masked_list = ", ".join([f"{col} ({ptype})" for col, ptype in masked_columns.items()])
+            total_msg += f"\n\n[PII Masking Active] Masked columns: {masked_list}"
         
         return f"{table}{total_msg}"
     except Exception as e:
@@ -523,6 +754,12 @@ if __name__ == "__main__":
     logger.info(f"  Authentication: {'Enabled' if TRINO_PASSWORD else 'Disabled'}")
     logger.info(f"  Protocol: {'HTTPS' if TRINO_USE_HTTPS else 'HTTP'}")
     logger.info(f"  Log Level: {LOG_LEVEL}")
+    logger.info(f"PII Masking Configuration:")
+    logger.info(f"  Enabled: {PII_MASKING_ENABLED}")
+    if PII_MASKING_ENABLED:
+        logger.info(f"  Mask Style: {PII_MASK_STYLE}")
+        logger.info(f"  Additional Masked Columns: {PII_MASKED_COLUMNS if PII_MASKED_COLUMNS else 'None'}")
+        logger.info(f"  Allowed Columns (skip masking): {PII_ALLOWED_COLUMNS if PII_ALLOWED_COLUMNS else 'None'}")
     
     # Validate configuration
     if not TRINO_HOST:
