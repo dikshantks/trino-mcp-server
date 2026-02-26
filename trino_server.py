@@ -10,6 +10,7 @@ import sys
 import logging
 from typing import Optional, Tuple
 from datetime import datetime, timezone
+from decimal import Decimal
 import httpx
 from mcp.server.fastmcp import FastMCP
 import trino
@@ -304,7 +305,7 @@ def mask_cell_value(value, pii_type: str = None) -> str:
         Masked value string
     """
     if value is None:
-        return None
+        return ""
     
     str_value = str(value)
     
@@ -317,17 +318,22 @@ def mask_cell_value(value, pii_type: str = None) -> str:
     
     # Partial masking - keep some characters for context
     if pii_type == 'email' and '@' in str_value:
-        # Email: j***n@g***.com
+        # Email: j****n@g****.com
         parts = str_value.split('@')
         if len(parts) == 2:
             local = parts[0]
             domain = parts[1]
-            masked_local = local[0] + '***' + (local[-1] if len(local) > 1 else '')
+            if len(local) > 2:
+                masked_local = local[0] + '****' + local[-1]
+            elif len(local) > 0:
+                masked_local = local[0] + '****'
+            else:
+                masked_local = '****'
             domain_parts = domain.split('.')
             if len(domain_parts) >= 2:
-                masked_domain = domain_parts[0][0] + '***.' + domain_parts[-1]
+                masked_domain = domain_parts[0][0] + '****.' + domain_parts[-1]
             else:
-                masked_domain = '***'
+                masked_domain = '****'
             return f"{masked_local}@{masked_domain}"
     
     if pii_type in ('phone_intl', 'phone_indian', 'phone'):
@@ -364,13 +370,13 @@ def mask_cell_value(value, pii_type: str = None) -> str:
             return f"{parts[0]}.***.***.*"
         return "***.***.***.***"
     
-    # Generic masking: show first and last character
+    # Generic masking: show first and last character with clear mask indicator
     if len(str_value) <= 2:
-        return "***"
+        return "[MASKED]"
     elif len(str_value) <= 4:
-        return str_value[0] + "**" + str_value[-1]
+        return str_value[0] + "[**]" + str_value[-1]
     else:
-        return str_value[0] + "***" + str_value[-1]
+        return str_value[0] + "[****]" + str_value[-1]
 
 
 def mask_pii_in_dataframe(df: pd.DataFrame, columns: list) -> tuple:
@@ -446,8 +452,44 @@ def format_results(cursor, limit: int = 100) -> str:
         if not rows:
             return "No results returned"
         
+        # Convert rows to list of lists, handling special types
+        processed_rows = []
+        for row in rows:
+            processed_row = []
+            for val in row:
+                try:
+                    if val is None:
+                        processed_row.append(None)
+                    elif isinstance(val, Decimal):
+                        # Handle Decimal type (common in Trino)
+                        processed_row.append(str(val))
+                    elif hasattr(val, 'isoformat'):
+                        # Handle datetime, date, time objects
+                        processed_row.append(val.isoformat())
+                    elif isinstance(val, (bytes, bytearray)):
+                        # Handle binary data
+                        processed_row.append(f"<binary:{len(val)} bytes>")
+                    elif isinstance(val, (list, dict)):
+                        # Handle arrays and maps
+                        processed_row.append(str(val))
+                    elif isinstance(val, (int, float, str, bool)):
+                        # Handle basic types directly
+                        processed_row.append(val)
+                    else:
+                        # Handle any other types by converting to string
+                        processed_row.append(str(val))
+                except Exception as e:
+                    logger.warning(f"Error converting value {type(val)}: {e}")
+                    processed_row.append(f"<error: {type(val).__name__}>")
+            processed_rows.append(processed_row)
+        
         # Create DataFrame for better formatting
-        df = pd.DataFrame(rows, columns=columns)
+        df = pd.DataFrame(processed_rows, columns=columns)
+        
+        # Convert all columns to string to avoid formatting issues
+        # Replace None with empty string for tabulate compatibility
+        for col in df.columns:
+            df[col] = df[col].apply(lambda x: str(x) if x is not None else "")
         
         # Apply PII masking if enabled
         masked_columns = {}
@@ -471,8 +513,12 @@ def format_results(cursor, limit: int = 100) -> str:
         
         return f"{table}{total_msg}"
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
         logger.error(f"Error formatting results: {e}")
-        return f"Error formatting results: {str(e)}"
+        logger.error(f"Full traceback:\n{error_trace}")
+        # Return more details in error message for debugging
+        return f"Error formatting results: {str(e)}\n\nDebug info:\n{error_trace}"
 
 # === MCP TOOLS ===
 
