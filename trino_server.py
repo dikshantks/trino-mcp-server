@@ -498,8 +498,17 @@ def format_results(cursor, limit: int = 100) -> str:
             if masked_columns:
                 logger.info(f"PII masking applied to columns: {list(masked_columns.keys())}")
         
-        # Format as table with column width limits
-        table = tabulate(df, headers='keys', tablefmt='grid', showindex=False, maxcolwidths=50)
+        # Format as table with column width limits.
+        # NOTE: tabulate's own maxcolwidths= param (as of 0.10.0) corrupts short
+        # cell values in some column combinations (e.g. boolean-looking columns
+        # render as "True" regardless of actual value) - truncate manually instead
+        # and let tabulate size columns from the already-bounded content.
+        MAX_CELL_WIDTH = 50
+        for col in df.columns:
+            df[col] = df[col].apply(
+                lambda x: (x[:MAX_CELL_WIDTH - 3] + "...") if len(x) > MAX_CELL_WIDTH else x
+            )
+        table = tabulate(df.values.tolist(), headers=list(df.columns), tablefmt='grid', showindex=False)
         
         result_count = len(rows)
         total_msg = f"\n\nShowing {result_count} row(s)"
