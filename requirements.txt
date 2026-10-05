@@ -1,5 +1,5 @@
 # MCP (Model Context Protocol) server framework
-mcp[cli]>=1.2.0
+mcp[cli]>=1.2.0,<2.0.0
 
 # HTTP client for Trino connections
 httpx>=0.24.0
